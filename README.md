@@ -1,2 +1,2 @@
-# bp_tsp
-Branch-and-price algorithm for the traveling salesman problem.
+# bp_bpp
+Branch-and-price algorithm for the bin packing problem problem.

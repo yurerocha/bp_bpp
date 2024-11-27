@@ -1,4 +1,5 @@
 #ifndef UTILS_H
+#define UTILS_H
 
 #include <list>
 #include <utility>
@@ -19,4 +20,4 @@ struct Node {
 	std::list<std::pair<int, int>> sep, tog;
 };
 
-#endif UTILS_H
+#endif // Utils
