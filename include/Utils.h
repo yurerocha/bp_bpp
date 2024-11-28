@@ -1,6 +1,7 @@
 #ifndef UTILS_H
 #define UTILS_H
 
+#include <chrono>
 #include <list>
 #include <utility>
 
@@ -12,12 +13,36 @@ inline bool isl(double a, double b) {
 	return a < b - eps;
 }
 
+inline bool isg(double a, double b) {
+	return a > b + eps;
+}
+
 inline bool iseq(double a, double b) {
 	return std::abs(a - b) < eps;
 }
 
 struct Node {
 	std::list<std::pair<int, int>> sep, tog;
+};
+
+class Timer {
+public:
+	/**
+	 * @brief Starts the timer.
+	 */
+	void start() { begin = std::chrono::steady_clock::now(); }
+
+	/**
+	 * @brief Returns the elapsed time since the start of the timer.
+	 */
+	double count() const {
+		auto end = std::chrono::steady_clock::now();
+		std::chrono::duration<double> et{end - begin};
+		return et.count();
+	}
+
+private:
+	std::chrono::steady_clock::time_point begin;
 };
 
 #endif // Utils

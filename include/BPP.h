@@ -4,6 +4,7 @@
 #include <ilcplex/ilocplex.h>
 #include <iostream>
 #include <memory>
+#include <limits>
 #include <sstream>
 #include <set>
 #include <utility>
@@ -18,21 +19,19 @@ public:
     /**
      * @brief Solve the restricted master problem.
      */
-    void solve() { mRmp.solve(); }
-
-    bool solvePricingProblem(const Node& rNode, IloEnv& rEnv);
+    std::pair<int, int> solve(const Node& rNode);
 
     /**
      * @brief Update the bounds of the lambda variables in the master problem.
      */
-    void updateBounds(const Node& rNode,
-				      bool newUB);
+    void updateBounds(const Node& rNode);
     /**
      * @brief Insert constraints to force the branchin in the pricing problem.
      */
-    IloRangeArray computeConstraints(const Node& rNode,
-                                     IloEnv& rEnv,
-							         IloNumVarArray& x) const;
+    void addPricingConstrs(const Node& rNode,
+                               IloEnv& rEnv,
+                               IloModel& rPricingModel,
+							   IloNumVarArray& x);
 
     /**
      * @brief Compute the items over which the branching is performed.
@@ -44,11 +43,12 @@ public:
 
     IloNumArray getDuals(IloEnv& rEnv) const;
 
-    double getRmpObjValue() const { return mRmp.getObjValue(); }
+    int getBestIntObjValue() const { return mBestIntObj; }
+    double getRmpObjValue() const { return mMaster.getObjValue(); }
 
     int getNbLambda() const { return mLambdas.getSize(); }
 
-    void insertColumn(const IloNumArray& rCol);
+    void insertColumn(IloNumArray& rCol);
 
     void printSol() const;
     void printBins() const;
@@ -62,7 +62,9 @@ private:
 	IloExpr mObj;
 	IloRangeArray mPartitionConstr;
 	IloObjective  mMasterObj;
-	IloCplex mRmp;
+	IloCplex mMaster;
+
+    int mBestIntObj;
 };
 
 #endif
