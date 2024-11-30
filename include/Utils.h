@@ -7,7 +7,6 @@
 
 const double eps = 1e-6;
 const double M = 1e6;
-const double inf = 1e10;
 
 inline bool isl(double a, double b) {
 	return a < b - eps;
@@ -21,8 +20,13 @@ inline bool iseq(double a, double b) {
 	return std::abs(a - b) < eps;
 }
 
+inline bool isgeq(double a, double b) {
+	return isg(a, b) || iseq(a, b);
+}
+
 struct Node {
 	std::list<std::pair<int, int>> sep, tog;
+	bool isRoot;
 };
 
 class Timer {

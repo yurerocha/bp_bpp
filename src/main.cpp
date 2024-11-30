@@ -1,13 +1,14 @@
-#include <ilcplex/ilocplex.h>
 #include <cstdlib>
+#include <ilcplex/ilocplex.h>
+#include <iomanip>
 #include <memory>
 #include <utility>
 #include <vector>
 #include <set>
 #include <sstream>
-#include "BPP.h"
-#include "Data.h"
-#include "Utils.h"
+#include "../include/BPP.h"
+#include "../include/Data.h"
+#include "../include/Utils.h"
 
 using namespace std;
 
@@ -22,7 +23,6 @@ int main(int argc, char **argv) {
 	auto pData = std::make_shared<Data>();
     pData->readData(argv[1]);
 
-	// std::unique_ptr<Model> pBPP(pData, env);
 	auto pBPP = std::make_unique<BPP>(pData, env);
 
 	Timer timer;
@@ -31,28 +31,29 @@ int main(int argc, char **argv) {
 	Node n;
 	n.sep = {};
 	n.tog = {};
+	n.isRoot = true;
 	tree.push_back(n);
 
-	// Begin branch and price
 	int it = 0;
 	timer.start();
-	while (!tree.empty()) {
+	while (!tree.empty()) { // Begin branch and price
 		// cout << "It:" << it++ << endl;
 		// DFS:
-		auto& node = tree.back();
+		auto& rNode = tree.back();
 		auto itNode = tree.end();
 		--itNode;
-		// cout << "New branch" << endl;
 
-		auto b = pBPP->solve(node);
+		auto b = pBPP->solve(rNode);
 		if (b.first >= 0) {
 			Node ns, nj;
-			ns = node; 
-			nj = node;
+			ns = rNode; 
+			nj = rNode;
+			ns.isRoot = false;
+			nj.isRoot = false;
 			ns.sep.push_back(b);
 			nj.tog.push_back(b);
-			tree.push_back(nj);
 			tree.push_back(ns);
+			tree.push_back(nj);
 		}
 		// Update tree
 		tree.erase(itNode);
@@ -61,9 +62,14 @@ int main(int argc, char **argv) {
 
 	env.end();
 
-	std::cout << argv[1] << std::endl;
-	std::cout << "Bins used: "  << pBPP->getBestIntObjValue() << std::endl;
-	std::cout << "Elapsed time (s):" << timer.count() << std::endl;
+	// std::cout << argv[1] << std::endl;
+	// std::cout << "Bins used: "  << pBPP->getBestObjValue() << std::endl;
+	// std::cout << "Elapsed time (s):" << timer.count() << std::endl;
+
+	std::cout << argv[1] << " " 
+			  << pBPP->getBestIntObjValue() << " "
+			  << std::fixed << std::setprecision(3) 
+			  << timer.count() << std::endl;
 
 	return 0;
 }

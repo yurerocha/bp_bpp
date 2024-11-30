@@ -6,7 +6,7 @@
 #include <memory>
 #include <limits>
 #include <sstream>
-#include <set>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 #include "Data.h"
@@ -29,9 +29,8 @@ public:
      * @brief Insert constraints to force the branchin in the pricing problem.
      */
     void addPricingConstrs(const Node& rNode,
-                               IloEnv& rEnv,
-                               IloModel& rPricingModel,
-							   IloNumVarArray& x);
+                           IloModel& rPricingModel,
+						   IloNumVarArray& x);
 
     /**
      * @brief Compute the items over which the branching is performed.
@@ -39,11 +38,11 @@ public:
      * The first element of the returned pair is equal to -1 if branching is not
      * required.
      */
-    std::pair<int, int> computeBranchingItems() const;
+    std::pair<int, int> computeBranchingItems();
 
     IloNumArray getDuals(IloEnv& rEnv) const;
 
-    int getBestIntObjValue() const { return mBestIntObj; }
+    double getBestIntObjValue() const { return mBestIntObj; }
     double getRmpObjValue() const { return mMaster.getObjValue(); }
 
     int getNbLambda() const { return mLambdas.getSize(); }
@@ -55,16 +54,16 @@ public:
 
 private:
     std::shared_ptr<Data> mpData;
-    std::vector<std::set<int>> mItems;
+    std::vector<std::unordered_set<int>> mItems;
 
 	IloModel mMasterModel;
 	IloNumVarArray mLambdas;
 	IloExpr mObj;
 	IloRangeArray mPartitionConstr;
-	IloObjective  mMasterObj;
+	IloObjective mMasterObj;
 	IloCplex mMaster;
 
-    int mBestIntObj;
+    double mBestIntObj;
 };
 
 #endif
