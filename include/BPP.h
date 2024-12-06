@@ -30,7 +30,7 @@ public:
      */
     void addPricingConstrs(const Node& rNode,
                            IloModel& rPricingModel,
-						   IloNumVarArray& x);
+						   IloBoolVarArray& x);
 
     /**
      * @brief Compute the items over which the branching is performed.

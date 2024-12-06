@@ -1,7 +1,7 @@
 #!/bin/python3
 
 fn1 = 'results.log'
-fn2 = 't'
+fn2 = 'benchmark.log'
 
 f1 = open(fn1, "r").readlines()
 f2 = open(fn2, "r").readlines()
@@ -25,4 +25,4 @@ for l in f1[0:len(f1) - 1]:
     if i > len(f2):
         break;
 
-print(f'Nb diff: {nb_diff} of:{len(f1)}')
+print(f'Nb diff:{nb_diff} of:{len(f1)}')

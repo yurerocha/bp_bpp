@@ -35,64 +35,50 @@ std::pair<int, int> BPP::solve(const Node& rNode) {
 	// Solve restricted master problem
 	mMaster.solve();
 
-	IloEnv env;
-	// cout << "Initial lower bound: " << pBPP->getRmpObjValue() << endl;
-
-	// std::cout << "Solution: \n";
-	// printBins();
-	// printSol();
-
 	std::pair<int, int> b = {-1, -1};
     if (!rNode.isRoot && isgeq(std::ceil(mMaster.getObjValue()), mBestIntObj)) {
-    	env.end();
+		// Prune
     	return b;
     }
 
-	// cout << "Start column generation" << endl;
-	while (true) { // Begin column generation 
-		if (mMaster.getStatus() == IloAlgorithm::Infeasible) {
-		    break;
-		} 
-		// else if (!rNode.isRoot && isgeq(std::ceil(mMaster.getObjValue()), 
-		// 								  mBestIntObj)) {
-        // 	env.end();
-        // 	mC2 = true;
-        // 	return b;
-        // }
+	// Build and solve the pricing problem
+	IloEnv env;
+	IloModel pricingModel(env);
+	IloExpr sumPacked(env);
+	IloBoolVarArray x(env, mpData->getNbItems());
+
+	for (int i = 0; i < mpData->getNbItems(); ++i) {
+		// std::ostringstream oss;
+		// oss << "x" << i;
+
+		// x[i].setName(oss.str().c_str());
+
+		sumPacked += mpData->getItemWeight(i) * x[i];
+	}
+	addPricingConstrs(rNode, pricingModel, x);
+
+	IloObjective pricingObj = IloMinimize(env);
+	pricingModel.add(pricingObj);
+
+	pricingModel.add(sumPacked <= mpData->getBinCapacity());
+
+	// std::cout << "Start column generation" << std::endl;
+	// Begin column generation
+	while (mMaster.getStatus() == IloAlgorithm::Optimal) { 
+		IloCplex pricingProblem(pricingModel);
+		pricingProblem.setParam(IloCplex::Param::Threads, 1);
+		// Disables CPLEX log
+		pricingProblem.setOut(env.getNullStream());
 
 		// Get the dual variables
 		auto pi = getDuals(env);
 
-		// for (size_t i = 0; i < mpData->getNbItems(); i++) {
-		// 	std::cout << "Dual variable of constraint " 
-		// 			  << i << " = " << pi[i] << std::endl;
-		// }
-
-		// Build and solve the pricing problem
-		IloModel pricingModel(env);
-
-		IloNumVarArray x(env, mpData->getNbItems(), 0, 1, IloNumVar::Bool);
-		IloExpr sumPacked(env);
-		IloExpr pricingObj(env, 1);
-
+        IloExpr sumPricing(env, 1);
 		for (int i = 0; i < mpData->getNbItems(); ++i) {
-			std::ostringstream oss;
-			oss << "x" << i;
-
-			x[i].setName(oss.str().c_str());
-
-			pricingObj -= pi[i] * x[i];
-
-			sumPacked += mpData->getItemWeight(i) * x[i];
+			sumPricing -= pi[i] * x[i];
 		}
-		addPricingConstrs(rNode, pricingModel, x);
-		pricingModel.add(IloMinimize(env, pricingObj));
-		pricingModel.add(sumPacked <= mpData->getBinCapacity());
 
-		IloCplex pricingProblem(pricingModel);
-
-		// Disables CPLEX log
-		pricingProblem.setOut(env.getNullStream());
+        pricingObj.setExpr(sumPricing);
 
 		pricingProblem.solve();
 
@@ -103,7 +89,7 @@ std::pair<int, int> BPP::solve(const Node& rNode) {
 		}
 
 		// std::cout << "Pricing obj:" << pricingProblem.getObjValue() 
-		//			 << std::endl;
+		// 		  << std::endl;
 		if (isl(pricingProblem.getObjValue(), 0.0)) {
 			// std::cout << "Reduced cost is equal to " 
 			// 		  << pricingProblem.getObjValue() 
@@ -119,33 +105,22 @@ std::pair<int, int> BPP::solve(const Node& rNode) {
 
 			mMaster.solve();
 			
-			pricingProblem.end();
+			// pricingProblem.clear();
+			// pricingProblem.end();
 		} else {
 			// std::cout << "No column with negative reduced costs found. "
 			// 		  << "The current basis is optimal" << std::endl;
 			// std::cout << "Final master problem: " << std::endl;
 			// system("cat model.lp");
-			pricingProblem.end();
+			// pricingProblem.clear();
+			// pricingProblem.end();
 			break;
 		}
 	} // End column generation
 
-	// Check for artificial variables in the solution
-	// if (!rNode.isRoot) {
-	// 	IloNumArray lambdaVals(env, mLambdas.getSize());
-	// 	mMaster.getValues(lambdaVals, mLambdas);
-
-	// 	for (int i = 0; i < mpData->getNbItems(); ++i) {
-	// 		if (isg(lambdaVals[i], 0.0)) {
-	// 			env.end();
-	// 			return b;
-	// 		}
-	// 	}
-	// }
-	b = computeBranchingItems();
 	env.end();
 
-	return b;
+	return computeBranchingItems();
 }
 
 void BPP::updateBounds(const Node& rNode) {
@@ -172,7 +147,7 @@ void BPP::updateBounds(const Node& rNode) {
 
 void BPP::addPricingConstrs(const Node& rNode, 
 							IloModel& rPricingModel,
-                            IloNumVarArray& x) {
+                            IloBoolVarArray& x) {
 	// Force s.first and s.second to be in separate bins
 	for (auto s : rNode.sep) {
 		rPricingModel.add(x[s.first] + x[s.second] <= 1);
@@ -233,7 +208,9 @@ void BPP::insertColumn(IloNumArray& rCol) {
         if (isg(rCol[i], 0.5)) {
             newItemsCol.insert(i);
         }
+		// std::cout << rCol[i] << " ";
     }
+	// std::cout << std::endl;
     mItems.push_back(newItemsCol);
 
     // Add the column to the master problem
