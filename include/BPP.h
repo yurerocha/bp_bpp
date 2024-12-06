@@ -9,6 +9,7 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
+#include "combo.h"
 #include "Data.h"
 #include "Utils.h"
 
@@ -48,6 +49,10 @@ public:
     int getNbLambda() const { return mLambdas.getSize(); }
 
     void insertColumn(IloNumArray& rCol);
+
+    Combo runCombo(double lowerBound, 
+				   double upperBound, 
+				   const IloNumArray& pi);
 
     void printSol() const;
     void printBins() const;

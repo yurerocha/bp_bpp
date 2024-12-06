@@ -7,8 +7,10 @@
 #include <set>
 #include <sstream>
 #include "../include/BPP.h"
+#include "../include/combo.h"
 #include "../include/Data.h"
 #include "../include/Utils.h"
+
 
 using namespace std;
 

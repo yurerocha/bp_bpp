@@ -5,6 +5,7 @@ BPP::BPP(const std::shared_ptr<Data> pData, IloEnv& rEnv)
       mLambdas(rEnv, mpData->getNbItems(), 0, IloInfinity),
       mObj(rEnv), mPartitionConstr(rEnv), 
 	  mBestIntObj(std::numeric_limits<double>::infinity()) {
+	// Initialize the master problem
 
 	for (int i = 0; i < mpData->getNbItems(); i++) {
 		std::ostringstream oss;
@@ -34,12 +35,14 @@ std::pair<int, int> BPP::solve(const Node& rNode) {
 
 	// Solve restricted master problem
 	mMaster.solve();
+	// std::cout << "Staaart:" << mMaster.getObjValue()  << std::endl;
+	// getchar();
 
 	std::pair<int, int> b = {-1, -1};
-    if (!rNode.isRoot && isgeq(std::ceil(mMaster.getObjValue()), mBestIntObj)) {
-		// Prune
-    	return b;
-    }
+    // if (!rNode.isRoot && isgeq(std::ceil(mMaster.getObjValue()), mBestIntObj)) {
+	// 	// Prune
+    // 	return b;
+    // }
 
 	// Build and solve the pricing problem
 	IloEnv env;
@@ -64,49 +67,92 @@ std::pair<int, int> BPP::solve(const Node& rNode) {
 
 	// std::cout << "Start column generation" << std::endl;
 	// Begin column generation
-	while (mMaster.getStatus() == IloAlgorithm::Optimal) { 
-		IloCplex pricingProblem(pricingModel);
-		pricingProblem.setParam(IloCplex::Param::Threads, 1);
-		// Disables CPLEX log
-		pricingProblem.setOut(env.getNullStream());
-
+	while (mMaster.getStatus() == IloAlgorithm::Optimal) {
 		// Get the dual variables
 		auto pi = getDuals(env);
+		double profit = std::numeric_limits<double>::infinity();
+		Combo combo;
+		IloCplex pricingProblem(pricingModel);
 
-        IloExpr sumPricing(env, 1);
-		for (int i = 0; i < mpData->getNbItems(); ++i) {
-			sumPricing -= pi[i] * x[i];
+		// std::cout << "Duals:";
+		// for (int i = 0; i < mpData->getNbItems(); i++) {
+		// 	std::cout << pi[i] << " ";
+		// }
+		// std::cout << std::endl;
+
+		if (rNode.isRoot) {
+			// Heuristic for solving the knapsack problem
+			combo = runCombo(0, mBestIntObj, pi);
+			// Output the results
+			profit = 1.0 - combo.maxProfit;
+			// std::cout << "Maximum profit: " << profit << std::endl;
+			// std::cout << "Items included in the knapsack:" << std::endl;
+			// for (int i = 0; i < mpData->getNbItems(); i++) {
+			// 	// if (combo.pItems[i].x) {
+			// 		std::cout << "Item " << i + 1 << " X:" << combo.pItems[i].x << " (Profit: " << combo.pItems[i].p << ", Weight: " << combo.pItems[i].w << ")" << std::endl;
+			// 	// }
+			// }
+		} 
+		else {
+			// IloCplex pricingProblem(pricingModel);
+			pricingProblem.setParam(IloCplex::Param::Threads, 1);
+			// Disables CPLEX log
+			pricingProblem.setOut(env.getNullStream());
+
+			IloExpr sumPricing(env, 1);
+			for (int i = 0; i < mpData->getNbItems(); ++i) {
+				sumPricing -= pi[i] * x[i];
+			}
+
+			pricingObj.setExpr(sumPricing);
+
+			pricingProblem.solve();
+
+			if (pricingProblem.getStatus() == IloAlgorithm::Infeasible) {
+				env.end();
+				pricingProblem.end();
+				return b;
+			}
+
+			profit = pricingProblem.getObjValue();
 		}
 
-        pricingObj.setExpr(sumPricing);
-
-		pricingProblem.solve();
-
-		if (pricingProblem.getStatus() == IloAlgorithm::Infeasible) {
-			env.end();
-            pricingProblem.end();
-			return b;
-		}
-
-		// std::cout << "Pricing obj:" << pricingProblem.getObjValue() 
-		// 		  << std::endl;
-		if (isl(pricingProblem.getObjValue(), 0.0)) {
+		// std::cout << "Pricing obj:" << profit << std::endl;
+		if (isl(profit, 0.0)) {
 			// std::cout << "Reduced cost is equal to " 
 			// 		  << pricingProblem.getObjValue() 
 			// 		  << ", which is less than 0..." << std::endl;
 
 			IloNumArray enteringCol(env, mpData->getNbItems());
 
-			pricingProblem.getValues(enteringCol, x);
+			if (rNode.isRoot) {
+				for (int i = 0; i < mpData->getNbItems(); ++i) {
+					// enteringCol[i] = combo.pItems[i].x;
+					// std::cout << combo.pItems[i].x << " ";
+					enteringCol[combo.pItems[i].id] = combo.pItems[i].x;
+					// std::cout << enteringCol[i] << " ";
+				}
+				// std::cout << std::endl;
+			} 
+			else {
+				pricingProblem.getValues(enteringCol, x);
+				// std::cout << "valores pricing:" << std::endl;
+				// for (int i = 0; i < mpData->getNbItems(); ++i) {
+				// 	std::cout << pricingProblem.getValue(x[i]) << " ";
+				// }
+				// std::cout << std::endl;
+				// std::cout << "Não é root" << std::endl;
+			}
 
 			insertColumn(enteringCol);
 
 			// std::cout << "Solving the RMP again..." << std::endl;
 
 			mMaster.solve();
+			// getchar();
 			
-			// pricingProblem.clear();
-			// pricingProblem.end();
+			pricingProblem.clear();
+			pricingProblem.end();
 		} else {
 			// std::cout << "No column with negative reduced costs found. "
 			// 		  << "The current basis is optimal" << std::endl;
@@ -119,6 +165,11 @@ std::pair<int, int> BPP::solve(const Node& rNode) {
 	} // End column generation
 
 	env.end();
+
+	if (!rNode.isRoot && isgeq(std::ceil(mMaster.getObjValue()), mBestIntObj)) {
+		// Prune
+    	return b;
+    }
 
 	return computeBranchingItems();
 }
@@ -184,9 +235,11 @@ std::pair<int, int> BPP::computeBranchingItems() {
 	// If the solution is integer, the best delta will have value 0.5, i.e.
 	// |0 - 0.5| = |1 - 0.5| = 0.5
 	// In such a case, stop branching
+	// std::cout << "Best delta: " << bestDelta << std::endl;
 	if (iseq(bestDelta, 0.5)) { 
 		if (isl(mMaster.getObjValue(), mBestIntObj)) {
 		    mBestIntObj = mMaster.getObjValue();
+			// std::cout << "Best integer objective: " << mBestIntObj << std::endl;
 		}
 		return {-1, -1};
 	}
@@ -224,6 +277,28 @@ void BPP::insertColumn(IloNumArray& rCol) {
     newLambda.setName(oss.str().c_str());
 
     mLambdas.add(newLambda);
+}
+
+Combo BPP::runCombo(double lowerBound, 
+				    double upperBound, 
+				    const IloNumArray& pi) {
+    item *pItems = new item[mpData->getNbItems()];
+
+    // Initialize items
+    for (int i = 0; i < mpData->getNbItems(); ++i) {
+		pItems[i].id = i;
+        pItems[i].p = pi[i]; 
+        pItems[i].w = mpData->getItemWeight(i);
+    }
+
+    // Call the combo function
+    long maxProfit = combo(pItems, pItems + mpData->getNbItems() - 1, 
+						   mpData->getBinCapacity(), 
+						   lowerBound, 
+						   upperBound, 
+						   true, false);
+
+	return Combo(pItems, maxProfit);
 }
 
 void BPP::printSol() const {

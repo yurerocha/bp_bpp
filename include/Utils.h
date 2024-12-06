@@ -4,6 +4,7 @@
 #include <chrono>
 #include <list>
 #include <utility>
+#include "combo.h"
 
 const double eps = 1e-6;
 const double M = 1e6;
@@ -47,6 +48,11 @@ public:
 
 private:
 	std::chrono::steady_clock::time_point begin;
+};
+
+struct Combo {
+	item *pItems;
+	double maxProfit;
 };
 
 #endif // Utils
