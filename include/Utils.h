@@ -53,6 +53,12 @@ private:
 struct Combo {
 	item *pItems;
 	double maxProfit;
+
+	// ~Combo() {
+	// 	if (pItems) {
+	// 		delete pItems;
+	// 	}
+	// }
 };
 
 #endif // Utils

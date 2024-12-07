@@ -31,6 +31,11 @@ BPP::BPP(const std::shared_ptr<Data> pData, IloEnv& rEnv)
 }
 
 std::pair<int, int> BPP::solve(const Node& rNode) {
+	item* pComboItems = nullptr;
+	if (rNode.isRoot) {
+		pComboItems = new item[mpData->getNbItems()];
+	}
+
 	updateBounds(rNode);
 
 	// Solve restricted master problem
@@ -71,7 +76,6 @@ std::pair<int, int> BPP::solve(const Node& rNode) {
 		// Get the dual variables
 		auto pi = getDuals(env);
 		double profit = std::numeric_limits<double>::infinity();
-		Combo combo;
 		IloCplex pricingProblem(pricingModel);
 
 		// std::cout << "Duals:";
@@ -82,14 +86,21 @@ std::pair<int, int> BPP::solve(const Node& rNode) {
 
 		if (rNode.isRoot) {
 			// Heuristic for solving the knapsack problem
-			combo = runCombo(0, mBestIntObj, pi);
+			updateComboItems(pComboItems, pi);
+			profit = (double)combo(pComboItems, 
+								   pComboItems + mpData->getNbItems() - 1, 
+						           mpData->getBinCapacity(), 
+						           0.0, 
+						           mBestIntObj, 
+						           true, false);
+			// Division by M is necessary since the prices were multiplied by M
+			profit = 1.0 - profit / M;
 			// Output the results
-			profit = 1.0 - combo.maxProfit;
 			// std::cout << "Maximum profit: " << profit << std::endl;
 			// std::cout << "Items included in the knapsack:" << std::endl;
 			// for (int i = 0; i < mpData->getNbItems(); i++) {
-			// 	// if (combo.pItems[i].x) {
-			// 		std::cout << "Item " << i + 1 << " X:" << combo.pItems[i].x << " (Profit: " << combo.pItems[i].p << ", Weight: " << combo.pItems[i].w << ")" << std::endl;
+			// 	// if (pComboItems[i].x) {
+			// 		std::cout << "Item " << i + 1 << " X:" << pComboItems[i].x << " (Profit: " << pComboItems[i].p << ", Weight: " << pComboItems[i].w << ")" << std::endl;
 			// 	// }
 			// }
 		} 
@@ -111,6 +122,10 @@ std::pair<int, int> BPP::solve(const Node& rNode) {
 			if (pricingProblem.getStatus() == IloAlgorithm::Infeasible) {
 				env.end();
 				pricingProblem.end();
+				// if (rNode.isRoot && pComboItems) {
+				// 	delete pComboItems;
+				// 	pComboItems = nullptr;
+				// }
 				return b;
 			}
 
@@ -127,9 +142,9 @@ std::pair<int, int> BPP::solve(const Node& rNode) {
 
 			if (rNode.isRoot) {
 				for (int i = 0; i < mpData->getNbItems(); ++i) {
-					// enteringCol[i] = combo.pItems[i].x;
-					// std::cout << combo.pItems[i].x << " ";
-					enteringCol[combo.pItems[i].id] = combo.pItems[i].x;
+					// enteringCol[i] = pComboItems[i].x;
+					// std::cout << pComboItems[i].x << " ";
+					enteringCol[pComboItems[i].id] = pComboItems[i].x;
 					// std::cout << enteringCol[i] << " ";
 				}
 				// std::cout << std::endl;
@@ -167,9 +182,18 @@ std::pair<int, int> BPP::solve(const Node& rNode) {
 	env.end();
 
 	if (!rNode.isRoot && isgeq(std::ceil(mMaster.getObjValue()), mBestIntObj)) {
+		// if (rNode.isRoot && pComboItems) {
+		// 	delete pComboItems;
+		// 	pComboItems = nullptr;
+		// }
 		// Prune
     	return b;
     }
+
+	// if (rNode.isRoot && pComboItems) {
+	// 	delete pComboItems;
+	// 	pComboItems = nullptr;
+	// }
 
 	return computeBranchingItems();
 }
@@ -279,26 +303,13 @@ void BPP::insertColumn(IloNumArray& rCol) {
     mLambdas.add(newLambda);
 }
 
-Combo BPP::runCombo(double lowerBound, 
-				    double upperBound, 
-				    const IloNumArray& pi) {
-    item *pItems = new item[mpData->getNbItems()];
-
+void BPP::updateComboItems(item* pComboItems, const IloNumArray& pi) const {
     // Initialize items
     for (int i = 0; i < mpData->getNbItems(); ++i) {
-		pItems[i].id = i;
-        pItems[i].p = pi[i]; 
-        pItems[i].w = mpData->getItemWeight(i);
+		pComboItems[i].id = i;
+        pComboItems[i].p = M * pi[i];
+        pComboItems[i].w = mpData->getItemWeight(i);
     }
-
-    // Call the combo function
-    long maxProfit = combo(pItems, pItems + mpData->getNbItems() - 1, 
-						   mpData->getBinCapacity(), 
-						   lowerBound, 
-						   upperBound, 
-						   true, false);
-
-	return Combo(pItems, maxProfit);
 }
 
 void BPP::printSol() const {

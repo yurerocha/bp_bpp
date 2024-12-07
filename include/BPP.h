@@ -50,9 +50,7 @@ public:
 
     void insertColumn(IloNumArray& rCol);
 
-    Combo runCombo(double lowerBound, 
-				   double upperBound, 
-				   const IloNumArray& pi);
+    void updateComboItems(item* pItems, const IloNumArray& pi) const;
 
     void printSol() const;
     void printBins() const;
